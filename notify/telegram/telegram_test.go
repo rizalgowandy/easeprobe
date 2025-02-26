@@ -27,8 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"bou.ke/monkey"
 	"github.com/megaease/easeprobe/global"
+	"github.com/megaease/easeprobe/monkey"
 	"github.com/megaease/easeprobe/report"
 	"github.com/stretchr/testify/assert"
 )
@@ -47,6 +47,7 @@ func generateRandomString(length int) string {
 }
 
 func assertError(t *testing.T, err error, msg string) {
+	t.Helper()
 	assert.Error(t, err)
 	assert.Equal(t, msg, err.Error())
 }

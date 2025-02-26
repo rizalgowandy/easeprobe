@@ -25,12 +25,13 @@ import (
 	"strings"
 	"testing"
 
-	"bou.ke/monkey"
+	"github.com/megaease/easeprobe/monkey"
 	"github.com/megaease/easeprobe/notify/sms/conf"
 	"github.com/stretchr/testify/assert"
 )
 
 func assertError(t *testing.T, err error, msg string) {
+	t.Helper()
 	assert.Error(t, err)
 	assert.Equal(t, msg, err.Error())
 }
@@ -56,7 +57,7 @@ func testNotify(t *testing.T, provider conf.Provider) {
 		}, nil
 	})
 	err = provider.Notify("title", "text")
-	assertError(t, err, "Error response from SMS [500] - [Internal Server Error]")
+	assertError(t, err, "Error response from SMS with request body <From=&To=&text=text> [500] - [Internal Server Error]")
 
 	monkey.Patch(io.ReadAll, func(_ io.Reader) ([]byte, error) {
 		return nil, errors.New("read error")
