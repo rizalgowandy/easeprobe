@@ -41,6 +41,7 @@ EaseProbe has the following major modules:
     - [1.9.5 Kafka](#195-kafka)
     - [1.9.6 PostgreSQL](#196-postgresql)
     - [1.9.7 Zookeeper](#197-zookeeper)
+  - [1.10 WebSocket](#110-websocket)
 - [2. Notification](#2-notification)
   - [2.1 Slack](#21-slack)
   - [2.2 Discord](#22-discord)
@@ -144,6 +145,9 @@ The following is an example of the alerting interval for HTTP Probe:
   http:
     - name: Web Service
       url: http://example.com:1080
+      labels:
+        service: web_example
+        env:    wg-idc-prod
       alert:
         strategy: regular
         factor: 1
@@ -270,11 +274,14 @@ the following example configuration is a basic HTTP probe configuration, which o
 # HTTP Probe Configuration
 
 http:
-  # A Website
+  # A Website without SO_LINGER
   - name: MegaEase Website (Global)
     url: https://megaease.com
-
-  # Some of the Software support the HTTP Query
+    nolinger: true
+    labels:
+      team:  ease
+      owner: megaease
+  # Some of the Software supports HTTP probing
   - name: ElasticSearch
     url: http://elasticsearch.server:9200
   - name: Eureka
@@ -333,12 +340,14 @@ http:
     # Response Checking
     contain: "success" # response body must contain this string, if not the probe is considered failed.
     not_contain: "failure" # response body must NOT contain this string, if it does the probe is considered failed.
+    with_output: false # if true, the error message will contain the output, it works for `contain` and `not_contain` field.
     regex: false # if true, the contain and not_contain will be treated as regular expression. default: false
     eval: # eval is a expression evaluation for HTTP response message
       doc: XML # support  XML, JSON, HTML, TEXT.
       expression: "x_time('//feed/updated') > '2022-07-01'" # the expression to evaluate.
     # configuration
     timeout: 10s # default is 30 seconds
+    nolinger: true # Do not set SO_LINGER
 ```
 
 > **Note**:
@@ -511,8 +520,11 @@ tcp:
     host: example.com:22
     timeout: 10s # default is 30 seconds
     interval: 2m # default is 60 seconds
+    nolinger: true # Disable SO_LINGER
     proxy: socks5://proxy.server:1080 # Optional. Only support socks5.
                                       # Also support the `ALL_PROXY` environment.
+    labels:
+      env: production
   - name: Kafka
     host: kafka.server:9093
 ```
@@ -532,6 +544,9 @@ ping:
     privileged: true # if true, the ping will be executed with icmp, otherwise use udp, default: false (Note: On Windows platform, this must be set to True)
     timeout: 10s # default is 30 seconds
     interval: 2m # default is 60 seconds
+    labels:
+        env:  development
+        role: primary
 ```
 
 ## 1.5 Shell
@@ -554,6 +569,9 @@ shell:
   - name: Redis (Local)
     cmd: "redis-cli"
     args:
+# uncomment for redis <= 5.0.2
+#      - "-a"
+#      - "AuthPassword"
       - "-h"
       - "127.0.0.1"
       - "ping"
@@ -561,10 +579,13 @@ shell:
                     # default: false
     env:
       # set the `REDISCLI_AUTH` environment variable for redis password
+      # NOTE: The `REDISCLI_AUTH` was first introduced in redis v5.0.3 so
+      # older clients may require an alternative way such as `-a AuthPassword`
       - "REDISCLI_AUTH=abc123"
     # check the command output, if does not contain the PONG, mark the status down
     contain : "PONG"
     not_contain: "failure" # response body must NOT contain this string, if it does the probe is considered failed.
+    with_output: false # if true, the error message will contain the output, it works for `contain` and `not_contain` field.
     regex: false # if true, the `contain` and `not_contain` will be treated as regular expression. default: false
 
   # Run Zookeeper command `stat` to check the zookeeper status
@@ -626,6 +647,7 @@ ssh:
       # check the command output, if does not contain the PONG, mark the status down
       contain : "PONG"
       not_contain: "failure" # response body must NOT contain this string, if it does the probe is considered failed.
+      with_output: false # if true, the error message will contain the output, it works for `contain` and `not_contain` field.
       regex: false # if true, the contain and not_contain will be treated as regular expression. default: false
 
     # Check the process status of `Kafka`
@@ -635,6 +657,7 @@ ssh:
       username: ubuntu
       key: /path/to/private.key
       cmd: "ps -ef | grep kafka"
+      nolinger: true # Disable SO_LINGER
 ```
 > **Note**:
 >
@@ -650,6 +673,7 @@ tls:
     host: expired.badssl.com:443
     proxy: socks5://proxy.server:1080 # Optional. Only support socks5.
                                       # Also support the `ALL_PROXY` environment.
+    nolinger: true             # Disable SO_LINGER
     insecure_skip_verify: true # don't check cert validity
     expire_skip_verify: true   # don't check cert expire date
     alert_expire_before: 168h  # alert if cert expire date is before X, the value is a Duration,
@@ -840,6 +864,25 @@ client:
     ca: /path/to/file.ca
     cert: /path/to/file.crt
     key: /path/to/file.key
+```
+## 1.10 WebSocket
+
+The websocket probe uses `websocket` identifier, it pings a websocket server with Ping/Pong message type of the WebSocket Protocol.
+
+```yaml
+websocket:
+  - name: asr-server
+    url: wss://example.com/asr/
+  - name: tts-server
+    url: wss://example.com/tts/
+    timeout: 5s
+    interval: 30s
+    headers:
+      Authorization: Bearer 2322f5d2-52d7-11ee-be56-0242ac120002
+    proxy: http://192.168.18.7
+    labels:
+      service: tts
+      idc: idc-a
 ```
 
 
@@ -1063,7 +1106,7 @@ Support SMS notification with multiple SMS service providers
 
 - [Twilio](https://www.twilio.com/sms)
 - [Vonage(Nexmo)](https://developer.vonage.com/messaging/sms/overview)
-- [YunPian](https://www.yunpian.com/doc/en/domestic/list.html)
+- [YunPian](https://www.yunpian.com/official/document/sms/en/domestic_list?lang=en)
 
 The plugin supports the following parameters:
  - `name`: A unique name for this notification endpoint
@@ -1158,10 +1201,12 @@ EaseProbe supports minutely, hourly, daily, weekly, or monthly SLA reports.
 ```YAML
 settings:
 # SLA Report schedule
-sla:
+  sla:
     #  minutely, hourly, daily, weekly (Sunday), monthly (Last Day), none
     schedule: "weekly"
-    # UTC time, the format is 'hour:min:sec'
+    # the time to send the SLA report. Ignored on hourly and minutely schedules
+    # - the format is 'hour:min:sec'.
+    # - the timezone can be configured by `settings.timezone`, default is UTC.
     time: "23:59"
 ```
 
@@ -1198,7 +1243,7 @@ When EaseProbe starts, it looks for the location of `data.yaml` and if found, lo
 
 ```YAML
 settings:
-sla:
+  sla:
     # SLA data persistence file path.
     # The default location is `$CWD/data/data.yaml`
     data: /path/to/data/file.yaml
@@ -1268,7 +1313,7 @@ The EaseProbe would create a PID file (default `$CWD/easeprobe.pid`) when it sta
 
 ```YAML
 settings:
-pid: /var/run/easeprobe.pid
+  pid: /var/run/easeprobe.pid
 ```
 
 - If the file already exists, EaseProbe would overwrite it.
@@ -1278,7 +1323,7 @@ If you want to disable the PID file, you can set it to "-" or "".
 
 ```YAML
 settings:
-    pid: "" # EaseProbe won't create a PID file
+  pid: "" # EaseProbe won't create a PID file
 ```
 
 ## 5.2 Log file Rotation
@@ -1459,6 +1504,7 @@ http:
     # Response Checking
     contain: "success" # response body must contain this string, if not the probe is considered failed.
     not_contain: "failure" # response body must NOT contain this string, if it does the probe is considered failed.
+    with_output: false # if true, the error message will contain the output, it works for `contain` and `not_contain` field.
     regex: false # if true, the contain and not_contain will be treated as regular expression. default: false
     eval: # eval is a expression evaluation for HTTP response message
       doc: XML # support  XML, JSON, HTML, TEXT.
@@ -1510,6 +1556,7 @@ shell:
     # check the command output, if does not contain the PONG, mark the status down
     contain : "PONG"
     not_contain: "failure" # response body must NOT contain this string, if it does the probe is considered failed.
+    with_output: false # if true, the error message will contain the output, it works for `contain` and `not_contain` field.
     regex: false # if true, the `contain` and `not_contain` will be treated as regular expression. default: false
 
 
@@ -1547,6 +1594,7 @@ ssh:
       # check the command output, if does not contain the PONG, mark the status down
       contain : "PONG"
       not_contain: "failure" # response body must NOT contain this string, if it does the probe is considered failed.
+      with_output: false # if true, the error message will contain the output, it works for `contain` and `not_contain` field.
       regex: false # if true, the contain and not_contain will be treated as regular expression. default: false
 
     # Check the process status of `Kafka`

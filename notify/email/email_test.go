@@ -22,8 +22,8 @@ import (
 	"reflect"
 	"testing"
 
-	"bou.ke/monkey"
 	"github.com/megaease/easeprobe/global"
+	"github.com/megaease/easeprobe/monkey"
 	"github.com/megaease/easeprobe/report"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/gomail.v2"
@@ -38,6 +38,7 @@ func (mwc *MyWriteCloser) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 func assertError(t *testing.T, err error, msg string) {
+	t.Helper()
 	assert.Error(t, err)
 	assert.Equal(t, msg, err.Error())
 }

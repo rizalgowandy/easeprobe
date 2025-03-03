@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"bou.ke/monkey"
 	"github.com/bradfitz/gomemcache/memcache"
+	"github.com/megaease/easeprobe/monkey"
 	"github.com/megaease/easeprobe/probe/client/conf"
 	"github.com/stretchr/testify/assert"
 )
@@ -45,7 +45,7 @@ func TestMemcache(t *testing.T) {
 	s, errmsg := m.Probe()
 	assert.False(t, s)
 	if runtime.GOOS == "windows" {
-		assert.Contains(t, errmsg, "connect timeout")
+		assert.Contains(t, errmsg, "No connection could be made because the target machine actively refused it")
 	} else {
 		assert.Contains(t, errmsg, "connection refused")
 	}

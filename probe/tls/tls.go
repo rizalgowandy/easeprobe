@@ -28,11 +28,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/megaease/easeprobe/global"
-	"github.com/megaease/easeprobe/probe/base"
 	"github.com/prometheus/client_golang/prometheus"
-
 	log "github.com/sirupsen/logrus"
+
+	"github.com/megaease/easeprobe/global"
+	"github.com/megaease/easeprobe/metric"
+	"github.com/megaease/easeprobe/probe/base"
 )
 
 // TLS implements a config for TLS
@@ -41,6 +42,7 @@ type TLS struct {
 	Host               string `yaml:"host" json:"host" jsonschema:"required,format=hostname,title=Host,description=The host to probe"`
 	Proxy              string `yaml:"proxy" json:"proxy,omitempty" jsonschema:"format=hostname,title=Proxy,description=The proxy to use for the TLS connection"`
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify" json:"insecure_skip_verify,omitempty" jsonschema:"title=Insecure Skip Verify,description=Whether to skip verifying the certificate chain and host name"`
+	NoLinger           bool   `yaml:"nolinger" json:"nolinger" jsonschema:"format=nolinger,title=Disable SO_LINGER,description=Disable SO_LINGER TCP flag, default=false"`
 
 	RootCAPemPath string         `yaml:"root_ca_pem_path" json:"root_ca_pem_path,omitempty" jsonschema:"title=Root CA PEM Path,description=The path to the root CA PEM file"`
 	RootCaPem     string         `yaml:"root_ca_pem" json:"root_ca_pem,omitempty" jsonschema:"title=Root CA PEM,description=The root CA PEM"`
@@ -76,7 +78,7 @@ func (t *TLS) Config(gConf global.ProbeSettings) error {
 		}
 	}
 
-	t.metrics = newMetrics(kind, tag)
+	t.metrics = newMetrics(kind, tag, t.Labels)
 
 	log.Debugf("[%s / %s] configuration: %+v", t.ProbeKind, t.ProbeName, *t)
 	return nil
@@ -90,7 +92,7 @@ func (t *TLS) DoProbe() (bool, string) {
 		log.Errorf("[%s / %s] tcp dial error: %v", t.ProbeKind, t.ProbeName, err)
 		return false, fmt.Sprintf("tcp dial error: %v", err)
 	}
-	if tcpConn, ok := conn.(*net.TCPConn); ok {
+	if tcpConn, ok := conn.(*net.TCPConn); ok && !t.NoLinger {
 		tcpConn.SetLinger(0)
 	}
 	defer conn.Close()
@@ -137,12 +139,12 @@ func (t *TLS) DoProbe() (bool, string) {
 
 	state := tconn.ConnectionState()
 
-	t.metrics.EarliestCertExpiry.With(prometheus.Labels{
+	t.metrics.EarliestCertExpiry.With(metric.AddConstLabels(prometheus.Labels{
 		"endpoint": t.ProbeResult.Endpoint,
-	}).Set(float64(getEarliestCertExpiry(&state).Unix()))
-	t.metrics.LastChainExpiryTimestampSeconds.With(prometheus.Labels{
+	}, t.Labels)).Set(float64(getEarliestCertExpiry(&state).Unix()))
+	t.metrics.LastChainExpiryTimestampSeconds.With(metric.AddConstLabels(prometheus.Labels{
 		"endpoint": t.ProbeResult.Endpoint,
-	}).Set(float64(getLastChainExpiry(&state).Unix()))
+	}, t.Labels)).Set(float64(getLastChainExpiry(&state).Unix()))
 
 	return true, "TLS Endpoint Verified Successfully!"
 }

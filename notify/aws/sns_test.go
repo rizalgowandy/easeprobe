@@ -23,11 +23,11 @@ import (
 	"reflect"
 	"testing"
 
-	"bou.ke/monkey"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sns"
 	"github.com/megaease/easeprobe/global"
+	"github.com/megaease/easeprobe/monkey"
 	"github.com/megaease/easeprobe/report"
 	"github.com/stretchr/testify/assert"
 )
@@ -65,7 +65,7 @@ func TestSNSConfig(t *testing.T) {
 
 	err = conf.SendSNS("title", "msg")
 	assert.Error(t, err)
-	assert.Equal(t, err.Error(), "publish error")
+	assert.Contains(t, err.Error(), "publish error")
 
 	monkey.UnpatchAll()
 }
